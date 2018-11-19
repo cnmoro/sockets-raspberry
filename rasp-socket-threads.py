@@ -6,6 +6,10 @@ import threading
 import Adafruit_DHT
 import RPi.GPIO as GPIO
 
+# Variavel que guarda o tempo de espera de atuacao das threads (em segundos)
+threadTimer = 5
+threadConnectionTimer = 60
+
 # Socket (parte servidor)
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serversocket.bind(('', 8089))
@@ -13,7 +17,9 @@ serversocket.listen(5)
 
 # Temperatura e cooler
 temperaturaAtual = -999
+umidadeAtual = -999
 coolerStatus = 0
+tempThreshold = 25
 
 # Variáveis de controle para IP do desktop
 desktopIpFound = 0
@@ -40,8 +46,9 @@ estaConectado = 0
 # Gerencia (reseta) flag de conexão
 def connFlagManager():
     global estaConectado
+    global threadConnectionTimer
     while True:
-        time.sleep(60)
+        time.sleep(threadConnectionTimer)
         estaConectado = 0
 
 # Encontrar desktop em rede DHCP
@@ -111,34 +118,41 @@ def checkServerMsgs():
 def readTemperature():
     global semaforo
     global temperaturaAtual
+    global umidadeAtual
     global sensor
     global pinoSensor
+    global threadTimer
     while True:
         umid, temp = Adafruit_DHT.read_retry(sensor, pinoSensor)
         print('readTemperature Deseja adquirir o semáforo\n')
         semaforo.acquire()
         print('readTemperature Adquiriu o semáforo\n')
-        if temp is not None:
+        if temp is not None and umid is not None:
             temperaturaAtual = temp
-            print('Sensor leu: ' + str(temp) + '\n')
+            umidadeAtual = umid
+            print('Sensor leu temperatura: ' + str(temp) + ', e umidade: ' + str(umid) + '\n')
         else:
             temperaturaAtual = -999
+            umidadeAtual = -999
         semaforo.release()
         print('readTemperature Liberou o semáforo\n')
-        time.sleep(10)
+        time.sleep(threadTimer)
 
 # Envia a temperatura lida para o servidor
 def sendData():
     global temperaturaAtual
+    global umidadeAtual
     global semaforo
+    global threadTimer
     while True:
-        time.sleep(10)
-        if temperaturaAtual != -999:
+        time.sleep(threadTimer)
+        if temperaturaAtual != -999 and umidadeAtual != -999:
             print('sendData Deseja adquirir o semáforo\n')
             semaforo.acquire()
             print('sendData Adquiriu o semáforo\n')
-            respond(str(temperaturaAtual))
+            respond('dados: ' + str(temperaturaAtual) + ',' + str(umidadeAtual))
             temperaturaAtual = -999
+            umidadeAtual = -999
             semaforo.release()
             print('sendData Liberou o semáforo\n')
 
@@ -147,12 +161,14 @@ def coolerHandler():
     global pinoCooler
     global estaConectado
     global coolerStatus
+    global threadTimer
+    global tempThreshold
     while True:
-        time.sleep(10)
+        time.sleep(threadTimer)
         print('Cooler handler: status = ' + str(coolerStatus) + '\n')
         #Testa para verificar se o servidor está há muito tempo sem responder
         if estaConectado == 0:
-            if temperaturaAtual >= 33:
+            if temperaturaAtual >= tempThreshold:
                 coolerStatus = 1
                 print('Ativando cooler via embarcado\n')
                 GPIO.output(pinoCooler, True)

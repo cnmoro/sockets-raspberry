@@ -8,7 +8,7 @@ import RPi.GPIO as GPIO
 
 # Variavel que guarda o tempo de espera de atuacao das threads (em segundos)
 threadTimer = 5
-threadConnectionTimer = 60
+threadConnectionTimer = 180
 
 # Socket (parte servidor)
 serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,9 +47,12 @@ estaConectado = 0
 def connFlagManager():
     global estaConectado
     global threadConnectionTimer
+    global semaforo
     while True:
         time.sleep(threadConnectionTimer)
+        semaforo.acquire()
         estaConectado = 0
+        semaforo.release()
 
 # Encontrar desktop em rede DHCP
 def findServer():
@@ -100,12 +103,14 @@ def respond(msg):
 # Verifica mensagens do servidor
 def checkServerMsgs():
     global coolerStatus
+    global semaforo
     global estaConectado
     while True:
         connection, address = serversocket.accept()
         buf = connection.recv(4096)
         print('ip: ' + str(address))
         if len(buf) > 0:
+            semaforo.acquire()
             estaConectado = 1
             print('Recebido: ' + str(buf) + '\n')
             respond('Mensagem Recebida pelo Rasp com Sucesso!')
@@ -113,6 +118,7 @@ def checkServerMsgs():
                 coolerStatus = 1
             elif buf == b'desligarCooler':
                 coolerStatus = 0
+            semaforo.release()
 
 # Lê a temperatura do sensor
 def readTemperature():
@@ -153,7 +159,7 @@ def sendData():
             respond('dados: ' + str(temperaturaAtual) + ',' + str(umidadeAtual))
             temperaturaAtual = -999
             umidadeAtual = -999
-            semaforo.release()
+            semaforo.release)
             print('sendData Liberou o semáforo\n')
 
 # Gerencia o acionamento do cooler
@@ -169,11 +175,15 @@ def coolerHandler():
         #Testa para verificar se o servidor está há muito tempo sem responder
         if estaConectado == 0:
             if temperaturaAtual >= tempThreshold:
+                semaforo.acquire()
                 coolerStatus = 1
+                semaforo.release()
                 print('Ativando cooler via embarcado\n')
                 GPIO.output(pinoCooler, True)
             else:
+                semaforo.acquire()
                 coolerStatus = 0
+                semaforo.release()
                 print('Desativando cooler via embarcado\n')
                 GPIO.output(pinoCooler, False)
         else:

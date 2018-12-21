@@ -97,7 +97,7 @@ def respond(msg):
     clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientsocket.connect((desktopIpAddr, 8089))
     print('Enviando: ' + str(msg) + '\n')
-    clientsocket.send(bytes(msg, 'UTF-8'))
+    clientsocket.send(msg.encode('utf-8'))
     clientsocket.close()
 
 # Verifica mensagens do servidor
